@@ -11,11 +11,12 @@ use std::sync::Mutex;
 use tauri::State;
 
 // =============================================================================
-// CONSTANTES DE SÉCURITÉ
+// CONSTANTES
 // =============================================================================
 
-const MAX_USB_DRIVES: usize = 10;       // Limite anti-DoS
-const MAX_DISK_NUMBER: u32 = 99;        // Numéro de disque max valide
+const MAX_USB_DRIVES: usize = 10;
+const MAX_DISK_NUMBER: u32 = 99;
+const MAX_SIZE_GB: u64 = 32;
 
 // =============================================================================
 // TYPES
@@ -25,6 +26,7 @@ const MAX_DISK_NUMBER: u32 = 99;        // Numéro de disque max valide
 pub struct UsbDrive {
     disk_number: u32,
     friendly_name: String,
+    size_bytes: u64,
     size_formatted: String,
     drive_letter: Option<String>,
     is_readonly: bool,
@@ -44,7 +46,6 @@ struct PsDisk {
     drive_letter: Option<String>,
 }
 
-// État partagé pour stocker les disques USB validés
 struct AppState {
     valid_usb_disks: Mutex<HashSet<u32>>,
 }
@@ -79,6 +80,7 @@ fn to_usb_drive(disk: PsDisk) -> UsbDrive {
     UsbDrive {
         disk_number: disk.disk_number,
         friendly_name: disk.friendly_name,
+        size_bytes: disk.size,
         size_formatted: format_size(disk.size),
         drive_letter: disk.drive_letter,
         is_readonly: disk.is_readonly,
@@ -124,7 +126,6 @@ async fn get_usb_drives(state: State<'_, AppState>) -> Result<Vec<UsbDrive>, Str
         vec![to_usb_drive(disk)]
     };
 
-    // Stocker les numéros de disque valides
     let mut valid = state.valid_usb_disks.lock().map_err(|_| "Erreur interne")?;
     valid.clear();
     for drive in &drives {
@@ -137,15 +138,21 @@ async fn get_usb_drives(state: State<'_, AppState>) -> Result<Vec<UsbDrive>, Str
 #[tauri::command]
 async fn fix_usb_drive(
     disk_number: u32,
+    size_bytes: u64,
     state: State<'_, AppState>,
-    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    // VALIDATION 1: Numéro dans les limites
+    // Validation 1: Numéro dans les limites
     if disk_number > MAX_DISK_NUMBER {
         return Err("Numéro de disque invalide".into());
     }
 
-    // VALIDATION 2: Disque dans la liste des USB détectés
+    // Validation 2: Taille max 32 GB pour FAT32
+    const GB: u64 = 1024 * 1024 * 1024;
+    if size_bytes > MAX_SIZE_GB * GB {
+        return Err("Clé trop grande (max 32 GB)".into());
+    }
+
+    // Validation 3: Disque dans la liste des USB détectés
     {
         let valid = state.valid_usb_disks.lock().map_err(|_| "Erreur interne")?;
         if !valid.contains(&disk_number) {
@@ -153,14 +160,16 @@ async fn fix_usb_drive(
         }
     }
 
-    // VALIDATION 3: Vérification côté PowerShell que c'est bien un USB
+    // Script complet: nettoyage + partition + formatage FAT32
     let format_script = format!(
         r#"
         $d = Get-Disk -Number {n} -EA Stop
         if ($d.BusType -ne 'USB') {{ throw 'Non USB' }}
         Clear-Disk -Number {n} -RemoveData -RemoveOEM -Confirm:$false -EA Stop
         Initialize-Disk -Number {n} -PartitionStyle MBR -EA Stop
-        New-Partition -DiskNumber {n} -UseMaximumSize -IsActive -AssignDriveLetter -EA Stop
+        $p = New-Partition -DiskNumber {n} -UseMaximumSize -IsActive -AssignDriveLetter -EA Stop
+        Start-Sleep -Seconds 1
+        Format-Volume -DriveLetter $p.DriveLetter -FileSystem FAT32 -NewFileSystemLabel 'USB' -Confirm:$false -EA Stop
         "#,
         n = disk_number
     );
@@ -171,13 +180,6 @@ async fn fix_usb_drive(
     );
 
     run_powershell(&elevated_cmd)?;
-
-    let hp_path = app_handle
-        .path_resolver()
-        .resolve_resource("HPUSBDisk.exe")
-        .ok_or("Ressource introuvable")?;
-
-    Command::new(hp_path).spawn().map_err(|_| "Échec du lancement")?;
 
     Ok(())
 }

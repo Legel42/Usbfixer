@@ -1,8 +1,14 @@
 # USB Fixer
 
-Déverrouille les clés USB protégées en écriture pour HP USB Disk Storage Format Tool.
+Formate les clés USB en FAT32 (compatible Konica Minolta et autres).
 
 **Par Angel Virion** | [MIT License](LICENSE)
+
+## Fonctionnalités
+
+- ✅ Supprime la protection en écriture
+- ✅ Formate en FAT32
+- ✅ Compatible clés jusqu'à 32 GB
 
 ## Installation
 
@@ -12,17 +18,9 @@ npm run tauri dev      # Développement
 npm run tauri build    # Production
 ```
 
-Placer `HPUSBDisk.exe` dans `src-tauri/` avant de compiler.
-
 ## Sécurité
 
-- ✅ Validation des numéros de disque (whitelist)
-- ✅ Double vérification USB (Rust + PowerShell)  
-- ✅ Limite anti-DoS (max 10 disques)
-- ✅ Messages d'erreur génériques (pas d'info leak)
-- ✅ CSP activé (protection XSS)
-- ✅ Permissions Tauri minimales
-
-## Signaler une faille
-
-Ouvrir une issue sur GitHub ou contacter l'auteur.
+- Validation whitelist des disques USB
+- Double vérification (Rust + PowerShell)
+- Limite 32 GB (restriction FAT32 Windows)
+- CSP activé, permissions minimales

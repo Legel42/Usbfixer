@@ -1,32 +1,29 @@
 /**
  * USB Fixer - Application principale
- * Par Angel Virion
- * 
- * Déverrouille les clés USB en écriture seule pour HP USB Disk Storage Format Tool
+ * Par Angel Virion - MIT License
  */
 
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 
-/* =============================================================================
-   TYPES
-============================================================================= */
+// =============================================================================
+// TYPES
+// =============================================================================
 
-/** Représente une clé USB détectée par le système */
 interface UsbDrive {
   disk_number: number;
   friendly_name: string;
+  size_bytes: number;
   size_formatted: string;
   drive_letter: string | null;
   is_readonly: boolean;
 }
 
-/** Types de statut pour les messages utilisateur */
-type StatusType = "info" | "success" | "error" | "processing";
+type StatusType = "success" | "error" | "processing";
 
-/* =============================================================================
-   ICÔNES SVG
-============================================================================= */
+// =============================================================================
+// ICÔNES
+// =============================================================================
 
 const Icons = {
   Usb: () => (
@@ -58,54 +55,41 @@ const Icons = {
   ),
 };
 
-/* =============================================================================
-   COMPOSANTS
-============================================================================= */
+// =============================================================================
+// COMPOSANTS
+// =============================================================================
 
-/** Carte affichant une clé USB */
-function DriveCard({ 
-  drive, 
-  selected, 
-  disabled, 
-  onSelect 
-}: { 
+function DriveCard({ drive, selected, disabled, onSelect }: { 
   drive: UsbDrive; 
   selected: boolean; 
   disabled: boolean;
   onSelect: () => void;
 }) {
+  const tooLarge = drive.size_bytes > 32 * 1024 * 1024 * 1024;
+  
   return (
     <div
-      className={`usb-card ${selected ? "selected" : ""}`}
-      onClick={() => !disabled && onSelect()}
+      className={`usb-card ${selected ? "selected" : ""} ${tooLarge ? "too-large" : ""}`}
+      onClick={() => !disabled && !tooLarge && onSelect()}
     >
-      {/* Icône */}
       <div className="usb-icon"><Icons.Usb /></div>
-      
-      {/* Informations */}
       <div className="usb-info">
         <div className="usb-name">
           {drive.friendly_name || `Disque ${drive.disk_number}`}
         </div>
         <div className="usb-meta">
-          <span className="usb-size">{drive.size_formatted}</span>
+          <span className={`usb-size ${tooLarge ? "error" : ""}`}>{drive.size_formatted}</span>
           {drive.drive_letter && <span className="usb-letter">{drive.drive_letter}:</span>}
-          {drive.is_readonly && <span className="usb-locked">🔒 Protégé</span>}
+          {drive.is_readonly && <span className="usb-locked">🔒</span>}
+          {tooLarge && <span className="usb-error">Trop grande</span>}
         </div>
       </div>
-      
-      {/* Indicateur de sélection */}
       <div className="select-dot">{selected && <Icons.Check />}</div>
     </div>
   );
 }
 
-/** Modal de confirmation avant formatage */
-function ConfirmModal({ 
-  drive, 
-  onConfirm, 
-  onCancel 
-}: { 
+function ConfirmModal({ drive, onConfirm, onCancel }: { 
   drive: UsbDrive; 
   onConfirm: () => void; 
   onCancel: () => void;
@@ -115,7 +99,7 @@ function ConfirmModal({
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-icon"><Icons.Warning /></div>
         <h3>Confirmer le formatage</h3>
-        <p>Toutes les données seront définitivement effacées.</p>
+        <p>La clé sera formatée en <strong>FAT32</strong>. Toutes les données seront effacées.</p>
         <div className="modal-drive">
           <strong>{drive.friendly_name || `Disque ${drive.disk_number}`}</strong>
           <span>{drive.size_formatted}{drive.drive_letter && ` • ${drive.drive_letter}:`}</span>
@@ -129,12 +113,11 @@ function ConfirmModal({
   );
 }
 
-/* =============================================================================
-   APPLICATION PRINCIPALE
-============================================================================= */
+// =============================================================================
+// APPLICATION
+// =============================================================================
 
 export default function App() {
-  // État
   const [drives, setDrives] = useState<UsbDrive[]>([]);
   const [selected, setSelected] = useState<UsbDrive | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,13 +125,11 @@ export default function App() {
   const [showModal, setShowModal] = useState(false);
   const [status, setStatus] = useState<{ type: StatusType; msg: string } | null>(null);
 
-  // Charge la liste des clés USB
   async function loadDrives() {
     setLoading(true);
     try {
       const result = await invoke<UsbDrive[]>("get_usb_drives");
       setDrives(result);
-      // Désélectionne si la clé n'existe plus
       if (selected && !result.find((d) => d.disk_number === selected.disk_number)) {
         setSelected(null);
       }
@@ -159,17 +140,19 @@ export default function App() {
     }
   }
 
-  // Formate la clé USB sélectionnée
   async function formatDrive() {
     if (!selected) return;
     
     setShowModal(false);
     setProcessing(true);
-    setStatus({ type: "processing", msg: "Formatage en cours..." });
+    setStatus({ type: "processing", msg: "Formatage FAT32 en cours..." });
 
     try {
-      await invoke("fix_usb_drive", { diskNumber: selected.disk_number });
-      setStatus({ type: "success", msg: "Succès! HP USB Disk va s'ouvrir." });
+      await invoke("fix_usb_drive", { 
+        diskNumber: selected.disk_number,
+        sizeBytes: selected.size_bytes 
+      });
+      setStatus({ type: "success", msg: "Clé USB formatée en FAT32!" });
       setTimeout(() => { loadDrives(); setSelected(null); }, 2000);
     } catch (err) {
       setStatus({ type: "error", msg: `Erreur: ${err}` });
@@ -178,29 +161,22 @@ export default function App() {
     }
   }
 
-  // Chargement initial
   useEffect(() => { loadDrives(); }, []);
 
-  /* -------------------------------------------------------------------------
-     RENDU
-  ------------------------------------------------------------------------- */
   return (
     <div className="app">
-      {/* En-tête */}
       <header className="header">
         <div className="logo"><Icons.Usb /></div>
         <h1>USB Fixer</h1>
-        <p className="subtitle">Déverrouille les clés USB protégées en écriture</p>
+        <p className="subtitle">Formate les clés USB en FAT32</p>
         <span className="author">Par Angel Virion</span>
       </header>
 
-      {/* Avertissement */}
       <div className="warning">
         <Icons.Warning />
-        <span><strong>Attention:</strong> Toutes les données seront effacées!</span>
+        <span><strong>32 GB max</strong> • Toutes les données seront effacées</span>
       </div>
 
-      {/* Liste des clés USB */}
       <section className="drives-section">
         <div className="section-header">
           <h2>Clé USB</h2>
@@ -233,17 +209,15 @@ export default function App() {
         )}
       </section>
 
-      {/* Bouton d'action */}
       <button
         className="btn-format"
         onClick={() => setShowModal(true)}
         disabled={!selected || processing}
       >
         <Icons.Flash />
-        {processing ? "Traitement..." : "Formater la clé USB"}
+        {processing ? "Formatage..." : "Formater en FAT32"}
       </button>
 
-      {/* Message de statut */}
       {status && (
         <div className={`status ${status.type}`}>
           {status.type === "processing" && <div className="spinner" />}
@@ -251,7 +225,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal de confirmation */}
       {showModal && selected && (
         <ConfirmModal
           drive={selected}
@@ -260,8 +233,7 @@ export default function App() {
         />
       )}
 
-      {/* Pied de page */}
-      <footer>USB Fixer v1.0</footer>
+      <footer>USB Fixer v1.0 • MIT License</footer>
     </div>
   );
 }

@@ -262,6 +262,21 @@ body {
 
 .usb-locked { color: var(--orange); }
 
+.usb-card.too-large {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--red);
+}
+
+.usb-card.too-large:hover {
+  background: var(--bg-card);
+  border-color: var(--red);
+  transform: none;
+}
+
+.usb-size.error { color: var(--red); }
+.usb-error { color: var(--red); font-size: 0.75rem; }
+
 /* Selection dot */
 .select-dot {
   width: 22px;
