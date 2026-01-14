@@ -1,26 +1,29 @@
 # USB Fixer
 
-Formate les clés USB en FAT32 (compatible Konica Minolta et autres).
+Formate les clés USB protégées en écriture pour HP USB Disk Storage Format Tool.
 
-**Par Angel Virion** | [MIT License](LICENSE)
-
-## Fonctionnalités
-
-- ✅ Supprime la protection en écriture
-- ✅ Formate en FAT32
-- ✅ Compatible clés jusqu'à 32 GB
+**Par Angel Virion** | MIT License
 
 ## Installation
 
 ```bash
 npm install
-npm run tauri dev      # Développement
-npm run tauri build    # Production
+npm run tauri dev
 ```
+
+Placer `HPUSBDisk.exe` dans `src-tauri/` avant de compiler.
 
 ## Sécurité
 
-- Validation whitelist des disques USB
-- Double vérification (Rust + PowerShell)
-- Limite 32 GB (restriction FAT32 Windows)
-- CSP activé, permissions minimales
+- ✅ Whitelist des disques USB détectés
+- ✅ Double vérification USB (Rust + PowerShell)
+- ✅ Limite numéro de disque (0-99)
+- ✅ CSP activé (protection XSS)
+- ✅ Permissions Tauri minimales
+- ✅ Aucune donnée personnelle collectée
+
+## Build
+
+```bash
+npm run tauri build
+```

@@ -10,55 +10,29 @@
     "version": "1.0.0"
   },
   "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": false
-      }
-    },
-    "bundle": {
-      "active": true,
-      "category": "Utility",
-      "copyright": "© 2024 Angel Virion - MIT License",
-      "deb": {
-        "depends": []
-      },
-      "externalBin": [],
-      "icon": [],
-      "identifier": "com.angelvirion.usbfixer",
-      "longDescription": "Application pour déverrouiller les clés USB en écriture seule",
-      "macOS": {
-        "entitlements": null,
-        "exceptionDomain": "",
-        "frameworks": [],
-        "providerShortName": null,
-        "signingIdentity": null
-      },
-      "resources": [],
-      "shortDescription": "Déverrouille les clés USB en écriture seule",
-      "targets": "all",
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": "",
-        "wix": null
-      }
-    },
+    "allowlist": { "all": false },
     "security": {
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
     },
-    "windows": [
-      {
-        "fullscreen": false,
-        "height": 600,
-        "resizable": true,
-        "title": "USB Fixer",
-        "width": 500,
-        "minWidth": 400,
-        "minHeight": 500,
-        "center": true
+    "bundle": {
+      "active": true,
+      "icon": ["icons/icon.ico"],
+      "identifier": "com.angelvirion.usbfixer",
+      "resources": ["HPUSBDisk.exe"],
+      "targets": ["app"],
+      "copyright": "© 2024 Angel Virion - MIT License",
+      "windows": {
+        "wix": null,
+        "nsis": null
       }
-    ]
+    },
+    "windows": [{
+      "title": "USB Fixer",
+      "width": 450,
+      "height": 500,
+      "resizable": false,
+      "center": true
+    }],
+    "systemTray": null
   }
 }
