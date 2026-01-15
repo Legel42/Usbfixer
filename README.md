@@ -18,7 +18,6 @@ USB Fixer permet de formater des clés USB en FAT32 sans limite de taille (>32GB
 - Clés USB protégées en écriture
 - Formatage FAT32 pour périphériques (Konica Minolta, imprimantes, etc.)
 - Préparation de clés USB pour usage professionnel
-- Clés >32GB nécessitant FAT32
 
 ---
 
@@ -126,7 +125,7 @@ Voir [LICENSE](LICENSE) pour les détails complets.
 
 ## 📞 Support
 
-- **Issues:** [GitHub Issues](https://github.com/[votre-username]/UsbFixer/issues)
+- **Issues:** [GitHub Issues](https://github.com/Legel42/UsbFixer/issues)
 - **Sécurité:** Voir [SECURITY.md](SECURITY.md)
 - **Confidentialité:** Voir [PRIVACY_FR.md](PRIVACY_FR.md)
 
