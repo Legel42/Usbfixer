@@ -1,5 +1,5 @@
 // USB Fixer - Par Angel Virion
-// Formate les clés USB et ouvre HPUSBDisk
+// Formate les clés USB en FAT32
 // License: MIT
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -9,6 +9,7 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::collections::HashSet;
 use std::os::windows::process::CommandExt;
+use std::io::Write;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -25,7 +26,6 @@ struct PsDisk {
     #[serde(rename = "Letter")] letter: Option<String>,
 }
 
-// PowerShell sans fenêtre
 fn ps(cmd: &str) -> String {
     Command::new("powershell")
         .args(["-NoProfile", "-Command", cmd])
@@ -64,26 +64,59 @@ fn get_drives(state: tauri::State<State>) -> Vec<UsbDrive> {
 }
 
 #[tauri::command]
-fn format_drive(n: u32, state: tauri::State<State>, app: tauri::AppHandle) -> Result<(), String> {
+fn format_drive(n: u32, state: tauri::State<State>, app: tauri::AppHandle) -> Result<String, String> {
+    // Validation
     {
         let valid = state.0.lock().map_err(|_| "Erreur interne")?;
         if !valid.contains(&n) { return Err("Disque non autorisé".into()); }
     }
     if n > 99 { return Err("Numéro invalide".into()); }
     
-    // Formatage identique au script original (pipe)
-    let script = format!(
-        "Get-Disk -Number {n} | Clear-Disk -RemoveData -RemoveOEM -Confirm:$false -PassThru | Initialize-Disk -PartitionStyle MBR -PassThru; \
-         New-Partition -DiskNumber {n} -UseMaximumSize -IsActive -AssignDriveLetter; \
-         Start-Sleep -Seconds 2"
+    // Vérifie que c'est bien un USB
+    let check = ps(&format!("(Get-Disk -Number {n}).BusType"));
+    if check != "USB" { return Err("Ce n'est pas un disque USB".into()); }
+    
+    // Crée le script diskpart dans un fichier temp
+    let diskpart_commands = format!(
+        "select disk {n}\r\nclean\r\nconvert mbr\r\ncreate partition primary\r\nactive\r\nassign\r\n"
     );
-    ps(&format!("Start-Process powershell -Verb runAs -WindowStyle Hidden -Wait -ArgumentList '-NoProfile -WindowStyle Hidden -Command {}'", script));
+    
+    // Script PowerShell complet (identique à celui qui fonctionne)
+    let ps_script = format!(r#"
+$diskpartScript = @"
+{diskpart_commands}"@
+$diskpartScript | diskpart | Out-Null
+Start-Sleep -Seconds 3
+Update-Disk -Number {n} -ErrorAction SilentlyContinue
+"#);
+
+    // Exécute en admin
+    ps(&format!(
+        "Start-Process powershell -Verb runAs -WindowStyle Hidden -Wait -ArgumentList '-NoProfile -Command {}' ",
+        ps_script.replace('\n', " ").replace('"', "'")
+    ));
+    
+    // Attendre que Windows monte le volume
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    
+    // Récupère la lettre
+    let letter = ps(&format!(
+        "(Get-Partition -DiskNumber {n} -EA SilentlyContinue | ?{{$_.DriveLetter}}).DriveLetter"
+    ));
+    
+    if letter.is_empty() {
+        return Err("Partition créée mais pas de lettre assignée".into());
+    }
     
     // Ouvre HPUSBDisk en admin
     if let Some(p) = app.path_resolver().resolve_resource("HPUSBDisk.exe") {
-        ps(&format!("Start-Process '{}' -Verb runAs", p.display()));
+        let _ = Command::new("powershell")
+            .args(["-NoProfile", "-Command", &format!("Start-Process '{}' -Verb runAs", p.display())])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
     }
-    Ok(())
+    
+    Ok(format!("Prêt! Clé sur {}:", letter))
 }
 
 fn main() {

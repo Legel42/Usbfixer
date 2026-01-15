@@ -19,10 +19,14 @@ export default function App() {
   
   const format = async () => {
     if (sel === null) return;
-    setStatus("Formatage...");
-    await invoke("format_drive", { n: sel }).catch(e => setStatus(""+e));
-    setStatus("Terminé! HPUSBDisk s'ouvre.");
-    setTimeout(() => { load(); setSel(null); setStatus(""); }, 2000);
+    setStatus("Préparation de la clé...");
+    try {
+      const result = await invoke<string>("format_drive", { n: sel });
+      setStatus("✓ " + result + " - HPUSBDisk s'ouvre.");
+    } catch (e) {
+      setStatus("✗ Erreur: " + e);
+    }
+    setTimeout(() => { load(); setSel(null); setStatus(""); }, 5000);
   };
 
   useEffect(() => { load(); }, []);
