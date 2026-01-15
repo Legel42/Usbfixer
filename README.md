@@ -23,12 +23,26 @@ USB Fixer permet de formater des clés USB en FAT32 sans limite de taille (>32GB
 
 ## ⚡ Installation Rapide
 
-### Prérequis
+### 🎯 Option 1: Utiliser l'Exécutable (Recommandé)
+
+**Téléchargez simplement:** [`USB-Fixer-v1.0.0.exe`](USB-Fixer-v1.0.0.exe) *(~3.8 MB)*
+
+1. Double-cliquez sur l'exécutable
+2. Acceptez l'invite UAC (droits admin requis)
+3. C'est tout! 🎉
+
+📖 Voir [RELEASE.md](RELEASE.md) pour plus de détails et dépannage.
+
+---
+
+### 🛠️ Option 2: Compiler depuis le Code Source
+
+**Prérequis:**
 - Windows 10/11
 - Node.js 18+ et npm
-- Rust 1.70+ (pour compilation)
+- Rust 1.70+
 
-### Étapes
+**Étapes:**
 
 ```bash
 # 1. Cloner le dépôt
@@ -43,9 +57,10 @@ npm run tauri dev
 
 # 4. Compiler pour production
 npm run tauri build
+# → L'exécutable sera dans: src-tauri/target/release/USB Fixer.exe
 ```
 
-**Important:** Le fichier `HPUSBDisk.exe` est déjà inclus dans `src-tauri/`.
+**Note:** Le fichier `HPUSBDisk.exe` est déjà inclus dans `src-tauri/`.
 
 ---
 

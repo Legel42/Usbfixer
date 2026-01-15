@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(powershell -Command \"Get-ChildItem ''g:\\\\Dev\\\\informatique\\\\UsbFixer\\\\Usbfixer\\\\src-tauri\\\\target\\\\release'' -Filter ''*.exe'' | Select-Object Name, Length\")"
     ]
   }
 }
