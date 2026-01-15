@@ -64,7 +64,7 @@ Si vous préférez compiler vous-même:
 
 ```bash
 # 1. Cloner le dépôt
-git clone https://github.com/[votre-username]/UsbFixer.git
+git clone https://github.com/Legel42/UsbFixer.git
 cd UsbFixer
 
 # 2. Installer les dépendances
@@ -101,7 +101,7 @@ npm run tauri build
 
 ## 📞 Support
 
-- **Issues:** [GitHub Issues](https://github.com/[votre-username]/UsbFixer/issues)
+- **Issues:** [GitHub Issues](https://github.com/Legel42/UsbFixer/issues)
 - **Sécurité:** Voir [SECURITY.md](SECURITY.md)
 - **Documentation:** Voir [README.md](README.md)
 
