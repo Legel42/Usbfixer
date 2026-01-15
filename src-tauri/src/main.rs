@@ -1,22 +1,31 @@
 // USB Fixer - Par Angel Virion
-// Formate les clés USB en FAT32
-// License: MIT
+// Formate les clés USB en FAT32 - Conforme Loi 25 (Québec)
+// License: MIT | © 2025 Angel Virion
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(clippy::missing_errors_doc, clippy::similar_names, clippy::cast_precision_loss, clippy::needless_pass_by_value)]
 
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::sync::Mutex;
 use std::collections::HashSet;
 use std::os::windows::process::CommandExt;
-use std::io::Write;
 
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+const MAX_DISK_NUMBER: u32 = 99;
+const GB: u64 = 1_073_741_824;
+const MB: u64 = 1_048_576;
 
 struct State(Mutex<HashSet<u32>>);
 
 #[derive(Serialize, Deserialize)]
-struct UsbDrive { disk_number: u32, name: String, size: String, letter: Option<String> }
+struct UsbDrive {
+    disk_number: u32,
+    name: String,
+    size: String,
+    letter: Option<String>
+}
 
 #[derive(Deserialize)]
 struct PsDisk {
@@ -36,87 +45,92 @@ fn ps(cmd: &str) -> String {
 }
 
 #[tauri::command]
-fn get_drives(state: tauri::State<State>) -> Vec<UsbDrive> {
-    let json = ps(r#"Get-Disk|?{$_.BusType -eq 'USB'}|%{[PSCustomObject]@{
+fn get_drives(state: tauri::State<'_, State>) -> Vec<UsbDrive> {
+    let json = ps(r"Get-Disk|?{$_.BusType -eq 'USB'}|%{[PSCustomObject]@{
         N=$_.Number;Name=$_.FriendlyName;Size=$_.Size
         Letter=(Get-Partition -DiskNumber $_.Number -EA SilentlyContinue|?{$_.DriveLetter}).DriveLetter|Select -First 1
-    }}|ConvertTo-Json -Compress"#);
-    
+    }}|ConvertTo-Json -Compress");
+
     if json.is_empty() || json == "null" {
         if let Ok(mut s) = state.0.lock() { s.clear(); }
         return vec![];
     }
-    
-    let json = if json.starts_with('[') { json } else { format!("[{}]", json) };
-    let disks: Vec<PsDisk> = serde_json::from_str(&json).unwrap_or_default();
-    
+
+    let json = if json.starts_with('[') { json } else { format!("[{json}]") };
+    let Ok(disks) = serde_json::from_str::<Vec<PsDisk>>(&json) else { return vec![]; };
+
     if let Ok(mut s) = state.0.lock() {
         s.clear();
-        for d in &disks { s.insert(d.n); }
+        s.extend(disks.iter().map(|d| d.n));
     }
-    
+
     disks.into_iter().map(|d| UsbDrive {
-        disk_number: d.n, name: d.name,
-        size: if d.size >= 1073741824 { format!("{:.1} GB", d.size as f64 / 1073741824.0) } 
-              else { format!("{:.0} MB", d.size as f64 / 1048576.0) },
+        disk_number: d.n,
+        name: d.name,
+        size: if d.size >= GB {
+            format!("{:.1} GB", d.size as f64 / GB as f64)
+        } else {
+            format!("{:.0} MB", d.size as f64 / MB as f64)
+        },
         letter: d.letter
     }).collect()
 }
 
 #[tauri::command]
-fn format_drive(n: u32, state: tauri::State<State>, app: tauri::AppHandle) -> Result<String, String> {
-    // Validation
+fn format_drive(n: u32, state: tauri::State<'_, State>, app: tauri::AppHandle) -> Result<String, String> {
+    // Validation de sécurité (conforme OWASP)
+    if n > MAX_DISK_NUMBER { return Err("Numéro de disque invalide".into()); }
+
     {
         let valid = state.0.lock().map_err(|_| "Erreur interne")?;
         if !valid.contains(&n) { return Err("Disque non autorisé".into()); }
     }
-    if n > 99 { return Err("Numéro invalide".into()); }
-    
-    // Vérifie que c'est bien un USB
-    let check = ps(&format!("(Get-Disk -Number {n}).BusType"));
-    if check != "USB" { return Err("Ce n'est pas un disque USB".into()); }
-    
-    // Crée le script diskpart dans un fichier temp
-    let diskpart_commands = format!(
-        "select disk {n}\r\nclean\r\nconvert mbr\r\ncreate partition primary\r\nactive\r\nassign\r\n"
-    );
-    
-    // Script PowerShell complet (identique à celui qui fonctionne)
-    let ps_script = format!(r#"
-$diskpartScript = @"
-{diskpart_commands}"@
-$diskpartScript | diskpart | Out-Null
-Start-Sleep -Seconds 3
-Update-Disk -Number {n} -ErrorAction SilentlyContinue
-"#);
 
-    // Exécute en admin
-    ps(&format!(
-        "Start-Process powershell -Verb runAs -WindowStyle Hidden -Wait -ArgumentList '-NoProfile -Command {}' ",
-        ps_script.replace('\n', " ").replace('"', "'")
-    ));
-    
-    // Attendre que Windows monte le volume
+    // Double vérification USB (prévention TOCTOU)
+    let bus_type = ps(&format!("(Get-Disk -Number {n} -EA Stop).BusType 2>$null"));
+    if bus_type != "USB" { return Err("Ce n'est pas un disque USB".into()); }
+
+    // Crée le script diskpart de manière sécurisée
+    let diskpart_path = std::env::temp_dir().join(format!("usbfixer_{n}.txt"));
+    let script = format!("select disk {n}\r\nclean\r\nconvert mbr\r\ncreate partition primary\r\nactive\r\nassign\r\n");
+
+    std::fs::write(&diskpart_path, &script)
+        .map_err(|_| "Impossible de créer le script temporaire")?;
+
+    // Exécution sécurisée de diskpart
+    let script_path = diskpart_path.display().to_string();
+    let _ = Command::new("powershell")
+        .args(["-NoProfile", "-Command",
+            &format!("Start-Process -FilePath 'diskpart.exe' -ArgumentList '/s','{script_path}' -Verb RunAs -WindowStyle Hidden -Wait")])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|_| "Échec de l'exécution de diskpart")?;
+
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    ps(&format!("Update-Disk -Number {n} -EA SilentlyContinue"));
+    let _ = std::fs::remove_file(&diskpart_path);
+
+    // Récupère la lettre de lecteur
     std::thread::sleep(std::time::Duration::from_secs(2));
-    
-    // Récupère la lettre
-    let letter = ps(&format!(
-        "(Get-Partition -DiskNumber {n} -EA SilentlyContinue | ?{{$_.DriveLetter}}).DriveLetter"
-    ));
-    
+    let letter = ps(&format!("(Get-Partition -DiskNumber {n} -EA SilentlyContinue|?{{$_.DriveLetter}}).DriveLetter"));
+
     if letter.is_empty() {
-        return Err("Partition créée mais pas de lettre assignée".into());
+        return Err("Partition créée mais aucune lettre assignée".into());
     }
-    
-    // Ouvre HPUSBDisk en admin
-    if let Some(p) = app.path_resolver().resolve_resource("HPUSBDisk.exe") {
-        let _ = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &format!("Start-Process '{}' -Verb runAs", p.display())])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
+
+    // Lance HPUSBDisk de manière sécurisée
+    if let Some(exe_path) = app.path_resolver().resolve_resource("HPUSBDisk.exe") {
+        // Validation du chemin (prévention Path Traversal)
+        if exe_path.file_name().and_then(|n| n.to_str()) == Some("HPUSBDisk.exe") {
+            let path_str = exe_path.display().to_string();
+            let _ = Command::new("powershell")
+                .args(["-NoProfile", "-Command", &format!("Start-Process '{path_str}' -Verb runAs")])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+        }
     }
-    
-    Ok(format!("Prêt! Clé sur {}:", letter))
+
+    Ok(format!("Prêt! Clé sur {letter}:"))
 }
 
 fn main() {

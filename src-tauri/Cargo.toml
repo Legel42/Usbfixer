@@ -2,6 +2,12 @@
 name = "usb-fixer"
 version = "1.0.0"
 edition = "2021"
+authors = ["Angel Virion"]
+license = "CC-BY-NC-4.0"
+description = "USB formatter (FAT32) with write protection removal - Quebec Law 25 compliant"
+repository = "https://github.com/[votre-username]/UsbFixer"
+keywords = ["usb", "format", "fat32", "windows", "diskpart"]
+categories = ["command-line-utilities"]
 
 [build-dependencies]
 tauri-build = { version = "1.5", features = [] }

@@ -20,7 +20,7 @@
       "identifier": "com.angelvirion.usbfixer",
       "resources": ["HPUSBDisk.exe"],
       "targets": ["app"],
-      "copyright": "© 2024 Angel Virion - MIT License",
+      "copyright": "© 2025 Angel Virion - CC BY-NC 4.0",
       "windows": {
         "wix": null,
         "nsis": null
