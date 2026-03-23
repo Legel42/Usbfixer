@@ -66,7 +66,7 @@ Cette politique peut être mise à jour. La date de dernière modification est i
 ## Contact
 
 Pour toute question concernant cette politique:
-- Créer une issue sur GitHub: https://github.com/[votre-username]/UsbFixer
+- Créer une issue sur GitHub: https://github.com/Legel42/UsbFixer
 - Ou contacter l'auteur via les informations du dépôt
 
 ## Licence

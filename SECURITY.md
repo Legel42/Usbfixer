@@ -45,8 +45,7 @@ If you discover a security vulnerability, please **DO NOT** create a public issu
 ## Utilisation
 
 ⚠️ **Ce logiciel est fourni SANS GARANTIE.**
-- Usage personnel et éducatif uniquement
-- **Usage commercial INTERDIT** sans autorisation
+- Distribué sous licence MIT
 - Voir LICENSE pour les détails
 
 ## Audit de Sécurité

@@ -1,0 +1,8 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for USB Fixer",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

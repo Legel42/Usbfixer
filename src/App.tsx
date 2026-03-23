@@ -1,57 +1,80 @@
-// USB Fixer - Par Angel Virion
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface Drive { disk_number: number; name: string; size: string; letter: string | null }
+
+type Status = { text: string; type: "info" | "success" | "error" };
+
+const RefreshIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+  </svg>
+);
 
 export default function App() {
   const [drives, setDrives] = useState<Drive[]>([]);
   const [sel, setSel] = useState<number | null>(null);
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try { setDrives(await invoke<Drive[]>("get_drives")); }
-    catch (e) { setStatus(""+e); }
-    setLoading(false);
-  };
-  
-  const format = async () => {
+    catch (e) { setStatus({ text: String(e), type: "error" }); }
+    finally { setLoading(false); }
+  }, []);
+
+  const format = useCallback(async () => {
     if (sel === null) return;
-    setStatus("Préparation de la clé...");
+    setStatus({ text: "Formatage en cours...", type: "info" });
     try {
       const result = await invoke<string>("format_drive", { n: sel });
-      setStatus("✓ " + result + " - HPUSBDisk s'ouvre.");
+      setStatus({ text: result + " — HPUSBDisk s'ouvre.", type: "success" });
     } catch (e) {
-      setStatus("✗ Erreur: " + e);
+      setStatus({ text: String(e), type: "error" });
     }
-    setTimeout(() => { load(); setSel(null); setStatus(""); }, 5000);
-  };
+    setSel(null);
+    setTimeout(() => { setStatus(null); load(); }, 4000);
+  }, [sel, load]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="app">
-      <h1>USB Fixer</h1>
-      <p className="author">Par Angel Virion</p>
-      <div className="warn">⚠️ Toutes les données seront effacées!</div>
-      
-      <div className="header">
-        <span>Clé USB</span>
-        <button onClick={load} disabled={loading} className={loading ? "spin" : ""}><span>↻</span></button>
+      <div className="brand">
+        <h1>USB Fixer</h1>
+        <p>Par Angel Virion</p>
       </div>
-      
-      {drives.length === 0 ? <div className="empty">Aucune clé USB</div> : drives.map(d => (
-        <div key={d.disk_number} className={`drive ${sel === d.disk_number ? "sel" : ""}`}
-             onClick={() => setSel(sel === d.disk_number ? null : d.disk_number)}>
-          <div><b>{d.name || `Disque ${d.disk_number}`}</b><span>{d.size}{d.letter && ` • ${d.letter}:`}</span></div>
-          {sel === d.disk_number && <span>✓</span>}
-        </div>
-      ))}
-      
-      <button className="fmt" onClick={format} disabled={sel === null}>Formater</button>
-      {status && <div className="status">{status}</div>}
+
+      <div className="warn">Toutes les données seront effacées</div>
+
+      <div className="section-header">
+        <span>Périphériques USB</span>
+        <button onClick={load} disabled={loading} className={loading ? "spin" : ""} aria-label="Actualiser">
+          <RefreshIcon />
+        </button>
+      </div>
+
+      <div className="drive-list">
+        {drives.length === 0 ? <div className="empty">Aucune clé USB détectée</div> : drives.map(d => (
+          <div key={d.disk_number} className={`drive ${sel === d.disk_number ? "sel" : ""}`}
+               onClick={() => setSel(prev => prev === d.disk_number ? null : d.disk_number)}
+               role="button" tabIndex={0} aria-selected={sel === d.disk_number}
+               onKeyDown={e => e.key === "Enter" && setSel(prev => prev === d.disk_number ? null : d.disk_number)}>
+            <div className="drive-info">
+              <span className="drive-name">{d.name || `Disque ${d.disk_number}`}</span>
+              <span className="drive-meta">{d.size}{d.letter && ` • ${d.letter}:`}</span>
+            </div>
+            <div className="check">✓</div>
+          </div>
+        ))}
+      </div>
+
+      <button className="fmt" onClick={format} disabled={sel === null}>
+        {status?.type === "info" ? "Formatage..." : "Formater la clé"}
+      </button>
+
+      {status && <div className={`status ${status.type}`}>{status.text}</div>}
     </div>
   );
 }

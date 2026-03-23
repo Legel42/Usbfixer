@@ -1,157 +1,118 @@
-# 🔧 USB Fixer
+# USB Fixer
 
-**Formateur de clés USB en FAT32 - Supprime la protection en écriture**
+Formateur de cles USB en FAT32 avec suppression de la protection en ecriture.
 
-Par **Angel Virion** | License CC BY-NC 4.0 (Usage non-commercial uniquement)
+Par **Angel Virion** | Licence MIT
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
-[![Tauri](https://img.shields.io/badge/Tauri-1.5-blue.svg)](https://tauri.app/)
-[![Loi 25](https://img.shields.io/badge/Loi_25-Conforme-green.svg)](PRIVACY_FR.md)
+[![Tauri](https://img.shields.io/badge/Tauri-2-blue.svg)](https://tauri.app/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## 📋 Description
+## Description
 
-USB Fixer permet de formater des clés USB en FAT32 sans limite de taille (>32GB) et **supprime automatiquement la protection en écriture**. Développé spécifiquement pour les environnements de travail nécessitant des clés USB fiables.
+USB Fixer formate des cles USB en FAT32 sans limite de taille (>32GB) et supprime la protection en ecriture via diskpart. L'outil lance ensuite HPUSBDisk pour finaliser le formatage FAT32.
 
-**Cas d'usage:**
-- Clés USB protégées en écriture
-- Formatage FAT32 pour périphériques (Konica Minolta, imprimantes, etc.)
-- Préparation de clés USB pour usage professionnel
+**Cas d'usage :**
+- Cles USB protegees en ecriture
+- Formatage FAT32 pour peripheriques (imprimantes, Konica Minolta, etc.)
+- Preparation de cles USB pour usage professionnel
 
 ---
 
-## ⚡ Installation Rapide
+## Installation
 
-### 🎯 Option 1: Utiliser l'Exécutable (Recommandé)
+### Option 1 : Executable (recommande)
 
-**Téléchargez simplement:** [`USB-Fixer-v1.0.0.exe`](USB-Fixer-v1.0.0.exe) *(~3.8 MB)*
+Telechargez `USB-Fixer-v1.0.0.exe` depuis les [Releases](https://github.com/Legel42/UsbFixer/releases).
 
-1. Double-cliquez sur l'exécutable
+1. Double-cliquez sur l'executable
 2. Acceptez l'invite UAC (droits admin requis)
-3. C'est tout! 🎉
 
-📖 Voir [RELEASE.md](RELEASE.md) pour plus de détails et dépannage.
+### Option 2 : Compiler depuis le code source
 
----
-
-### 🛠️ Option 2: Compiler depuis le Code Source
-
-**Prérequis:**
-- Windows 10/11
-- Node.js 18+ et npm
-- Rust 1.70+
-
-**Étapes:**
+**Prerequis :** Windows 10/11, Node.js 18+, Rust 1.70+
 
 ```bash
-# 1. Cloner le dépôt
-git clone https://github.com/[votre-username]/UsbFixer.git
+git clone https://github.com/Legel42/UsbFixer.git
 cd UsbFixer
-
-# 2. Installer les dépendances
 npm install
-
-# 3. Mode développement
 npm run tauri dev
-
-# 4. Compiler pour production
-npm run tauri build
-# → L'exécutable sera dans: src-tauri/target/release/USB Fixer.exe
 ```
 
-**Note:** Le fichier `HPUSBDisk.exe` est déjà inclus dans `src-tauri/`.
+Pour compiler en production :
+
+```bash
+npm run tauri build
+```
+
+L'executable sera dans `src-tauri/target/release/USB Fixer.exe`.
 
 ---
 
-## 🚀 Utilisation
+## Utilisation
 
-1. **Brancher** votre clé USB
-2. **Lancer** USB Fixer
-3. **Sélectionner** la clé à formater
-4. Cliquer sur **"Formater"**
-5. L'outil HPUSBDisk s'ouvre automatiquement pour finaliser le formatage FAT32
+1. Brancher la cle USB
+2. Lancer USB Fixer
+3. Selectionner la cle a formater
+4. Cliquer sur **Formater la cle**
+5. HPUSBDisk s'ouvre automatiquement pour finaliser le formatage FAT32
 
-⚠️ **ATTENTION:** Toutes les données sur la clé seront effacées!
-
----
-
-## ✨ Fonctionnalités
-
-- ✅ **Suppression de la protection en écriture** (diskpart clean)
-- ✅ Formatage FAT32 sans limite de taille (>32GB)
-- ✅ Interface simple et rapide
-- ✅ Validation stricte (disques USB uniquement)
-- ✅ 100% local - aucune connexion Internet
+**Attention :** toutes les donnees sur la cle seront effacees.
 
 ---
 
-## 🔒 Sécurité
+## Fonctionnement
 
-### Mesures Implémentées
-- ✅ **Validation stricte** des entrées (OWASP)
-- ✅ **Whitelist** des disques autorisés
-- ✅ **Double vérification USB** (prévention TOCTOU)
-- ✅ **Protection Path Traversal**
-- ✅ **Content Security Policy** activé
-- ✅ **Aucune collecte de données**
+Le formatage se fait en deux etapes :
 
-### Conformité
-- ✅ **Loi 25 (Québec)** - Aucune donnée personnelle collectée
-- ✅ Clippy warnings (Rust best practices)
-- ✅ Audit de sécurité documenté
+1. **diskpart** (via elevation admin) : `clean` > `convert mbr` > `create partition primary` > `active` > `assign`
+2. **HPUSBDisk** : formatage FAT32 (lance automatiquement en admin)
 
-Voir [SECURITY.md](SECURITY.md) pour plus de détails.
+La commande `clean` de diskpart supprime la table de partition, ce qui contourne la plupart des protections logicielles en ecriture.
 
 ---
 
-## 📊 Technologies
+## Securite
 
-- **Backend:** Rust + Tauri 1.5
-- **Frontend:** React + TypeScript
-- **Build:** Vite
-- **Formatage:** diskpart (Windows) + HPUSBDisk
+- Validation stricte des entrees (OWASP)
+- Whitelist des disques autorises (USB uniquement)
+- Double verification USB (prevention TOCTOU)
+- Content Security Policy active
+- Aucune collecte de donnees, 100% local
 
 ---
 
-## 🤝 Contribution
+## Technologies
 
-Les contributions sont bienvenues! Voir [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Backend :** Rust + Tauri 2
+- **Frontend :** React + TypeScript
+- **Build :** Vite
+- **Formatage :** diskpart + HPUSBDisk
 
-**Points importants:**
+---
+
+## Contribution
+
+Les contributions sont les bienvenues. Ouvrez une issue ou un pull request.
+
+- Tester sur materiel reel
 - Respecter les conventions Clippy (Rust)
-- Tester sur matériel réel
-- Aucune collecte de données tolérée
-- Code commenté en français préférable
+- Aucune collecte de donnees toleree
 
 ---
 
-## 📜 Licence
+## Licence
 
-**CC BY-NC 4.0** (Creative Commons - Attribution - Non Commercial)
-
-- ✅ Usage personnel et éducatif
-- ✅ Modification et redistribution (avec attribution)
-- ❌ **Usage commercial INTERDIT** sans autorisation
-
-Voir [LICENSE](LICENSE) pour les détails complets.
+[MIT](LICENSE) — libre d'utilisation, modification et redistribution, y compris pour un usage commercial.
 
 ---
 
-## 📞 Support
+## Avertissement
 
-- **Issues:** [GitHub Issues](https://github.com/Legel42/UsbFixer/issues)
-- **Sécurité:** Voir [SECURITY.md](SECURITY.md)
-- **Confidentialité:** Voir [PRIVACY_FR.md](PRIVACY_FR.md)
+Ce logiciel est fourni **tel quel, sans aucune garantie**. L'auteur n'est pas responsable des pertes de donnees. Faites toujours une sauvegarde avant de formater une cle USB.
 
 ---
 
-## ⚠️ Avertissement
-
-Ce logiciel est fourni **"TEL QUEL" SANS AUCUNE GARANTIE**. L'auteur n'est pas responsable des pertes de données ou dommages. **Utilisez à vos risques et périls.**
-
-Toujours faire une **sauvegarde** avant de formater une clé USB!
-
----
-
-**© 2025 Angel Virion** | Fabriqué au Québec 🇨🇦
+**© 2025 Angel Virion**

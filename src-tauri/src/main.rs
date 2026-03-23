@@ -1,11 +1,6 @@
-// USB Fixer - Par Angel Virion
-// Formate les clés USB en FAT32 - Conforme Loi 25 (Québec)
-// License: MIT | © 2025 Angel Virion
-
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
-#![allow(clippy::missing_errors_doc, clippy::similar_names, clippy::cast_precision_loss, clippy::needless_pass_by_value)]
 
+use tauri::Manager;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::sync::Mutex;
@@ -19,13 +14,8 @@ const MB: u64 = 1_048_576;
 
 struct State(Mutex<HashSet<u32>>);
 
-#[derive(Serialize, Deserialize)]
-struct UsbDrive {
-    disk_number: u32,
-    name: String,
-    size: String,
-    letter: Option<String>
-}
+#[derive(Serialize)]
+struct UsbDrive { disk_number: u32, name: String, size: String, letter: Option<String> }
 
 #[derive(Deserialize)]
 struct PsDisk {
@@ -37,7 +27,7 @@ struct PsDisk {
 
 fn ps(cmd: &str) -> String {
     Command::new("powershell")
-        .args(["-NoProfile", "-Command", cmd])
+        .args(["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", cmd])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -46,10 +36,9 @@ fn ps(cmd: &str) -> String {
 
 #[tauri::command]
 fn get_drives(state: tauri::State<'_, State>) -> Vec<UsbDrive> {
-    let json = ps(r"Get-Disk|?{$_.BusType -eq 'USB'}|%{[PSCustomObject]@{
-        N=$_.Number;Name=$_.FriendlyName;Size=$_.Size
-        Letter=(Get-Partition -DiskNumber $_.Number -EA SilentlyContinue|?{$_.DriveLetter}).DriveLetter|Select -First 1
-    }}|ConvertTo-Json -Compress");
+    let json = ps(
+        r"$d=Get-Disk|?{$_.BusType -eq 'USB'};if(!$d){return};$p=Get-Partition -EA 0|?{$_.DriveLetter};$d|%{$n=$_.Number;[PSCustomObject]@{N=$n;Name=$_.FriendlyName;Size=$_.Size;Letter=($p|?{$_.DiskNumber -eq $n}|Select -First 1).DriveLetter}}|ConvertTo-Json -Compress"
+    );
 
     if json.is_empty() || json == "null" {
         if let Ok(mut s) = state.0.lock() { s.clear(); }
@@ -72,13 +61,12 @@ fn get_drives(state: tauri::State<'_, State>) -> Vec<UsbDrive> {
         } else {
             format!("{:.0} MB", d.size as f64 / MB as f64)
         },
-        letter: d.letter
+        letter: d.letter,
     }).collect()
 }
 
 #[tauri::command]
 fn format_drive(n: u32, state: tauri::State<'_, State>, app: tauri::AppHandle) -> Result<String, String> {
-    // Validation de sécurité (conforme OWASP)
     if n > MAX_DISK_NUMBER { return Err("Numéro de disque invalide".into()); }
 
     {
@@ -86,45 +74,39 @@ fn format_drive(n: u32, state: tauri::State<'_, State>, app: tauri::AppHandle) -
         if !valid.contains(&n) { return Err("Disque non autorisé".into()); }
     }
 
-    // Double vérification USB (prévention TOCTOU)
-    let bus_type = ps(&format!("(Get-Disk -Number {n} -EA Stop).BusType 2>$null"));
-    if bus_type != "USB" { return Err("Ce n'est pas un disque USB".into()); }
+    if ps(&format!("(Get-Disk -Number {n} -EA Stop).BusType 2>$null")) != "USB" {
+        return Err("Ce n'est pas un disque USB".into());
+    }
 
-    // Crée le script diskpart de manière sécurisée
     let diskpart_path = std::env::temp_dir().join(format!("usbfixer_{n}.txt"));
-    let script = format!("select disk {n}\r\nclean\r\nconvert mbr\r\ncreate partition primary\r\nactive\r\nassign\r\n");
-
-    std::fs::write(&diskpart_path, &script)
+    std::fs::write(&diskpart_path, format!("select disk {n}\r\nclean\r\nconvert mbr\r\ncreate partition primary\r\nactive\r\nassign\r\n"))
         .map_err(|_| "Impossible de créer le script temporaire")?;
 
-    // Exécution sécurisée de diskpart
     let script_path = diskpart_path.display().to_string();
     let _ = Command::new("powershell")
-        .args(["-NoProfile", "-Command",
-            &format!("Start-Process -FilePath 'diskpart.exe' -ArgumentList '/s','{script_path}' -Verb RunAs -WindowStyle Hidden -Wait")])
+        .args(["-NoProfile", "-NoLogo", "-NonInteractive", "-Command",
+            &format!("Start-Process diskpart.exe -ArgumentList '/s','{script_path}' -Verb RunAs -WindowStyle Hidden -Wait")])
         .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|_| "Échec de l'exécution de diskpart")?;
+        .output();
 
-    std::thread::sleep(std::time::Duration::from_secs(3));
-    ps(&format!("Update-Disk -Number {n} -EA SilentlyContinue"));
     let _ = std::fs::remove_file(&diskpart_path);
-
-    // Récupère la lettre de lecteur
     std::thread::sleep(std::time::Duration::from_secs(2));
-    let letter = ps(&format!("(Get-Partition -DiskNumber {n} -EA SilentlyContinue|?{{$_.DriveLetter}}).DriveLetter"));
+
+    // Update-Disk + récupérer la lettre en un seul appel PS
+    let letter = ps(&format!(
+        "Update-Disk -Number {n} -EA 0;(Get-Partition -DiskNumber {n} -EA 0|?{{$_.DriveLetter}}).DriveLetter"
+    ));
 
     if letter.is_empty() {
         return Err("Partition créée mais aucune lettre assignée".into());
     }
 
-    // Lance HPUSBDisk de manière sécurisée
-    if let Some(exe_path) = app.path_resolver().resolve_resource("HPUSBDisk.exe") {
-        // Validation du chemin (prévention Path Traversal)
-        if exe_path.file_name().and_then(|n| n.to_str()) == Some("HPUSBDisk.exe") {
-            let path_str = exe_path.display().to_string();
+    if let Ok(dir) = app.path().resource_dir() {
+        let exe = dir.join("HPUSBDisk.exe");
+        if exe.exists() {
             let _ = Command::new("powershell")
-                .args(["-NoProfile", "-Command", &format!("Start-Process '{path_str}' -Verb runAs")])
+                .args(["-NoProfile", "-NoLogo", "-NonInteractive", "-Command",
+                    &format!("Start-Process '{}' -Verb RunAs", exe.display())])
                 .creation_flags(CREATE_NO_WINDOW)
                 .spawn();
         }

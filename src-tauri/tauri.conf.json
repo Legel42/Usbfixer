@@ -1,38 +1,38 @@
 {
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
+  "productName": "USB Fixer",
+  "version": "1.0.0",
+  "identifier": "com.angelvirion.usbfixer",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
   },
-  "package": {
-    "productName": "USB Fixer",
-    "version": "1.0.0"
-  },
-  "tauri": {
-    "allowlist": { "all": false },
+  "app": {
     "security": {
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
     },
-    "bundle": {
-      "active": true,
-      "icon": ["icons/icon.ico"],
-      "identifier": "com.angelvirion.usbfixer",
-      "resources": ["HPUSBDisk.exe"],
-      "targets": ["app"],
-      "copyright": "© 2025 Angel Virion - CC BY-NC 4.0",
-      "windows": {
-        "wix": null,
-        "nsis": null
+    "windows": [
+      {
+        "label": "main",
+        "title": "USB Fixer",
+        "width": 450,
+        "height": 500,
+        "resizable": false,
+        "center": true
       }
-    },
-    "windows": [{
-      "title": "USB Fixer",
-      "width": 450,
-      "height": 500,
-      "resizable": false,
-      "center": true
-    }],
-    "systemTray": null
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "icon": ["icons/icon.ico"],
+    "resources": ["HPUSBDisk.exe"],
+    "targets": ["app"],
+    "copyright": "© 2025 Angel Virion - MIT License",
+    "windows": {
+      "wix": null,
+      "nsis": null
+    }
   }
 }
