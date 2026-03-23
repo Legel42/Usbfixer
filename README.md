@@ -115,4 +115,4 @@ Ce logiciel est fourni **tel quel, sans aucune garantie**. L'auteur n'est pas re
 
 ---
 
-**© 2025 Angel Virion**
+**© 2026 Angel Virion**
